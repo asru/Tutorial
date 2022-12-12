@@ -1,6 +1,6 @@
 --Tutorial.lua by Rouneq
 --Based on Tutorial.mac by Chatwiththisname and Cannonballdex
---v0.99.1
+--v0.99.2
 --
 --Purpose:  Will conduct the tutorial for the current character
 --			from immediately after character creation
