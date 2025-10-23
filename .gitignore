@@ -1,0 +1,12 @@
+# VS Code settings that are workspace-specific
+.vscode/
+
+# Test deployment folder (not source code)
+TestTutorial/
+
+# Windows files
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
