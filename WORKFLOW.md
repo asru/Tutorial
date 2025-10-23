@@ -83,8 +83,8 @@ To get the latest changes from Rouneq's original repository:
 # Fetch the latest from upstream
 git fetch upstream
 
-# Merge into your local master
-git merge upstream/master
+# Merge into your local main
+git merge upstream/main
 
 # Push to your fork
 git push
@@ -118,7 +118,7 @@ git log --graph --oneline  # View as graph
 ```powershell
 git branch feature-name    # Create a new branch
 git checkout feature-name  # Switch to that branch
-git checkout master        # Switch back to master
+git checkout main          # Switch back to main
 git merge feature-name     # Merge feature into current branch
 ```
 
