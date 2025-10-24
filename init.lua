@@ -3290,10 +3290,78 @@ local function Absor()
 	if (Window("TaskWND").Child("Task_TaskElementList").List(3, 2)() ~= "Done") then
 		navHail(Spawn("Absor").ID())
 
+		-- Monks don't receive a starter weapon: close the dialog and continue
+		if (Me.Class.ShortName() == "MNK") then
+			closeDialog()
+			FunctionDepart(DebuggingRanks.Task)
+			return
+		end
+
 		if (TLO.InvSlot("mainhand").Item.Name()) then
-			local myWeapon = TLO.InvSlot("mainhand").Item.Name():gsub("%*", "")
-			local myWeaponType = myWeapon:match("%w+$")
+			-- Starter-weapon only: avoid handing in twink/custom weapons
+			local mainhandFull = TLO.InvSlot("mainhand").Item.Name()
+			local isStarter = false
+			if (mainhandFull:find("Dagger%*")) then isStarter = true end
+			if (mainhandFull:find("Club%*")) then isStarter = true end
+			if (mainhandFull:find("Short Sword%*")) then isStarter = true end
+			if (mainhandFull:find("Dull Axe%*")) then isStarter = true end
+
+			if (not isStarter) then
+				-- Non-starter equipped: try to hand in a starter from inventory instead
+				-- Use exact-match prefix (=) to find items with asterisks in their names
+				local patterns = {"=Dagger*", "=Club*", "=Short Sword*", "=Dull Axe*"}
+				local starterItem = nil
+				for _, pat in ipairs(patterns) do
+					local itm = TLO.FindItem(pat)
+					if (itm()) then starterItem = itm break end
+				end
+
+				if (starterItem) then
+					local starterName = starterItem.Name()
+					-- Pick up starter from inventory and hand to Absor
+					grabItem(starterName, "left")
+					Delay(1000, function() return Cursor.ID() end)
+					mq.cmd.usetarget()
+					Delay(1000, function() return not Cursor.ID() end)
+					Window("GiveWnd").Child("GVW_Give_Button").LeftMouseUp()
+					Delay(1000, function() return not Window("GiveWnd").Open() end)
+
+					-- Compute expected upgraded name from the starter item
+					local base = starterName:gsub("%*", ""):gsub("%s+$", "")
+					local prefix = base:find("Club") and "Polished" or "Sharpened"
+					local upgradedBase = base:gsub("^Dull%s+", "")
+					local upgradedQuery = "=" .. prefix .. " " .. upgradedBase
+					Delay(1000, function() return TLO.FindItemCount(upgradedQuery)() > 0 end)
+
+					-- Inform the player about successful completion using starter from inventory
+					local upgradedItem = TLO.FindItem(upgradedQuery)
+					if (upgradedItem()) then
+						Note.Info("Used starter weapon from inventory to complete Absor's task; upgraded item '%s' placed in your inventory.", upgradedItem.Name())
+					end
+
+					-- Ensure cursor cleared if item landed on it
+					if (Cursor.ID()) then mq.cmd.autoinventory() end
+
+					closeDialog()
+					FunctionDepart(DebuggingRanks.Task)
+					return
+				else
+					Note.Info("No starter weapon found: Absor's 'Learn About Weapons' task not completed.")
+					closeDialog()
+					FunctionDepart(DebuggingRanks.Task)
+					return
+				end
+			end
+
+			local myWeapon = mainhandFull:gsub("%*", ""):gsub("%s+$", "")
+			-- Determine expected upgrade prefix: Clubs -> Polished, others -> Sharpened (Dagger, Short Sword, Dull Axe)
+			local upgradePrefix = "Sharpened"
+			if (myWeapon:find("Club")) then
+				upgradePrefix = "Polished"
+			end
 			PrintDebugMessage(DebuggingRanks.Function, "Hand \ag%s\ax to Absor", myWeapon)
+
+			-- Give current weapon to Absor
 			mq.cmd.keypress("OPEN_INV_BAGS")
 			if (not Window("InventoryWindow").Open()) then
 				Window("InventoryWindow").DoOpen()
@@ -3313,15 +3381,79 @@ local function Absor()
 			Delay(1000, function()
 				return not Window("GiveWnd").Open()
 			end)
+
+			-- Wait for returned upgraded weapon to appear in inventory
+			-- Berserker case: "Dull Axe*" upgrades to "Sharpened Axe" (drop leading "Dull ")
+			local upgradedBase = myWeapon:gsub("^Dull%s+", "")
+			local upgradedQuery = "=" .. upgradePrefix .. " " .. upgradedBase
 			Delay(1000, function()
-				return TLO.FindItemCount(myWeaponType)()
+				return TLO.FindItemCount(upgradedQuery)() > 0
 			end)
-			myWeapon = TLO.FindItem(myWeaponType).Name()
-			PrintDebugMessage(DebuggingRanks.Function, "Equip \ag%s", myWeapon)
-			mq.cmdf("/exchange \"%s\" mainhand", myWeapon)
+
+			-- Find and equip the upgraded weapon
+			local found = TLO.FindItem(upgradedQuery)
+			if (found()) then
+				local foundItemSlot = found.ItemSlot()
+				if (foundItemSlot) then
+					mq.cmdf("/nomodkey /itemnotify %d leftmouseup", foundItemSlot)
+					Delay(1000)
+					mq.cmd("/nomodkey /itemnotify mainhand leftmouseup")
+					Delay(1000)
+					if (not TLO.InvSlot("mainhand").Item.ID()) then
+						Note.Info("Could not automatically equip your new weapon. Please manually equip the %s in your mainhand/primary slot.", found.Name())
+						if (Cursor.ID()) then
+							mq.cmd("/autoinventory")
+						end
+					end
+				else
+					Note.Info("Couldn't locate the upgraded weapon in inventory. Please manually equip a weapon in your mainhand/primary slot.")
+				end
+			else
+				Note.Info("Didn't find an upgraded weapon from Absor. Please manually equip a weapon in your mainhand/primary slot.")
+			end
 			mq.cmd.keypress("CLOSE_INV_BAGS")
 		else
-			Delay(1000)
+			-- No weapon equipped: try to hand in a starter from inventory
+			-- Use exact-match prefix (=) to find items with asterisks in their names
+			local patterns = {"=Dagger*", "=Club*", "=Short Sword*", "=Dull Axe*"}
+			local starterItem = nil
+			for _, pat in ipairs(patterns) do
+				local itm = TLO.FindItem(pat)
+				if (itm()) then starterItem = itm break end
+			end
+
+			if (starterItem) then
+				local starterName = starterItem.Name()
+				grabItem(starterName, "left")
+				Delay(1000, function() return Cursor.ID() end)
+				mq.cmd.usetarget()
+				Delay(1000, function() return not Cursor.ID() end)
+				Window("GiveWnd").Child("GVW_Give_Button").LeftMouseUp()
+				Delay(1000, function() return not Window("GiveWnd").Open() end)
+
+				local base = starterName:gsub("%*", ""):gsub("%s+$", "")
+				local prefix = base:find("Club") and "Polished" or "Sharpened"
+				local upgradedBase = base:gsub("^Dull%s+", "")
+				local upgradedQuery = "=" .. prefix .. " " .. upgradedBase
+				Delay(1000, function() return TLO.FindItemCount(upgradedQuery)() > 0 end)
+
+				-- Inform the player about successful completion using starter from inventory
+				local upgradedItem = TLO.FindItem(upgradedQuery)
+				if (upgradedItem()) then
+					Note.Info("Used starter weapon from inventory to complete Absor's task; upgraded item '%s' placed in your inventory.", upgradedItem.Name())
+				end
+
+				if (Cursor.ID()) then mq.cmd.autoinventory() end
+
+				closeDialog()
+				FunctionDepart(DebuggingRanks.Task)
+				return
+			else
+				Note.Info("No starter weapon found: Absor's 'Learn About Weapons' task not completed.")
+				closeDialog()
+				FunctionDepart(DebuggingRanks.Task)
+				return
+			end
 		end
 
 		closeDialog()
